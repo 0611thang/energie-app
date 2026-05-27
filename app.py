@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-
+Mama
 st.set_page_config(
     page_title="SocialEnergy",
     page_icon="⚡",

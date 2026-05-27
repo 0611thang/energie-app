@@ -122,19 +122,18 @@ function DashboardScreen() {
 }
 
 /* ─── Screen 2: Verwaltung ─── */
-function VerwaltungScreen() {
-  const [verkaufAktiv, setVerkaufAktiv] = useState(true);
+function VerwaltungScreen({ verkaufAktiv, setVerkaufAktiv }) {
   const [preis, setPreis] = useState(0.18);
 
   return (
     <div className="flex flex-col gap-4 pb-4">
       <Card>
         <Toggle label="Verkauf aktiv" value={verkaufAktiv} onChange={setVerkaufAktiv} />
-        {verkaufAktiv && (
-          <div className="mt-3 p-2 bg-green-50 rounded-xl">
-            <span className="text-xs text-green-600 font-medium">Energie wird aktiv verkauft</span>
-          </div>
-        )}
+        <div className={`mt-3 p-2 rounded-xl ${verkaufAktiv ? 'bg-green-50' : 'bg-gray-100'}`}>
+          <span className={`text-xs font-medium ${verkaufAktiv ? 'text-green-600' : 'text-gray-500'}`}>
+            {verkaufAktiv ? 'Energie wird aktiv verkauft' : 'Automatische Steuerung deaktiviert'}
+          </span>
+        </div>
       </Card>
       <Card>
         <div className="flex items-center justify-between mb-2">
@@ -393,11 +392,217 @@ function ProfilScreen() {
   );
 }
 
+/* ─── Screen 6: Prolog KI ─── */
+const empfehlungMap = {
+  weiterlernen: { label: 'Weiterlernen', badge: 'text-green-600 bg-green-100',  icon: '📚' },
+  atempause:    { label: 'Atempause',    badge: 'text-sky-600 bg-sky-100',      icon: '🌬️' },
+  selbstcheck:  { label: 'Selbstcheck',  badge: 'text-amber-600 bg-amber-100',  icon: '🔍' },
+  beobachten:   { label: 'Beobachten',   badge: 'text-orange-600 bg-orange-100', icon: '👁️' },
+};
+const zustandMap = {
+  reguliert: { label: 'Reguliert', badge: 'text-green-600 bg-green-100' },
+  erholt:    { label: 'Erholt',    badge: 'text-blue-600 bg-blue-100' },
+  belastet:  { label: 'Belastet',  badge: 'text-red-600 bg-red-100' },
+};
+const getEmpf = k => empfehlungMap[k] || { label: k, badge: 'text-gray-600 bg-gray-100', icon: '💡' };
+const getZust = k => zustandMap[k]    || { label: k, badge: 'text-gray-600 bg-gray-100' };
+
+function PrologKIScreen({ verkaufAktiv }) {
+  const [hf, setHf] = useState(52);
+  const [hrv, setHrv] = useState(86);
+  const [af, setAf] = useState(14.1);
+  const [analyse, setAnalyse] = useState(null);
+  const [empfehlungen, setEmpfehlungen] = useState(null);
+  const [analyseLoading, setAnalyseLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function runAnalyse(hfVal, hrvVal, afVal) {
+    setAnalyseLoading(true);
+    fetch(`https://www.neuro-agile.de/prolog/learning/api/analyse?person=demo&hf=${hfVal}&hrv=${hrvVal}&af=${afVal}`)
+      .then(r => r.json())
+      .then(data => { setAnalyse(data); setAnalyseLoading(false); })
+      .catch(() => { setFetchError('Analyse konnte nicht geladen werden.'); setAnalyseLoading(false); });
+  }
+
+  React.useEffect(() => {
+    fetch('https://www.neuro-agile.de/prolog/learning/api/empfehlungen')
+      .then(r => r.json())
+      .then(data => { setEmpfehlungen(data.results || []); setListLoading(false); })
+      .catch(() => { setFetchError('Verbindung fehlgeschlagen.'); setListLoading(false); });
+    runAnalyse(52, 86, 14.1);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="flex flex-col gap-4 pb-4">
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[340px] p-3 bg-gray-800 text-white text-xs rounded-xl shadow-lg text-center">
+          {toast}
+        </div>
+      )}
+      {fetchError && (
+        <div className="p-3 bg-red-50 rounded-xl text-xs text-red-600">{fetchError}</div>
+      )}
+
+      {/* Automatisch anwenden */}
+      <Card>
+        <button
+          onClick={() => {
+            if (!verkaufAktiv) {
+              showToast('Aktiviere Verkauf in der Verwaltung um automatisch anzuwenden');
+            }
+          }}
+          className={`w-full py-3 rounded-xl font-semibold text-sm transition-colors ${
+            verkaufAktiv
+              ? 'bg-green-500 text-white active:bg-green-600'
+              : 'bg-gray-200 text-gray-400 cursor-default'
+          }`}
+        >
+          Automatisch anwenden
+        </button>
+      </Card>
+
+      {/* Messwerte */}
+      <Card>
+        <p className="text-sm font-semibold text-gray-700 mb-3">Messwerte eingeben</p>
+        <div className="flex flex-col gap-4">
+          <div>
+            <div className="flex justify-between mb-1">
+              <span className="text-xs text-gray-500">Herzfrequenz (HF)</span>
+              <span className="text-xs font-bold text-rose-500">{hf} bpm</span>
+            </div>
+            <input type="range" min={30} max={120} step={1} value={hf}
+              onChange={e => setHf(Number(e.target.value))}
+              className="w-full h-2 rounded-full accent-rose-400" />
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[10px] text-gray-400">30</span>
+              <span className="text-[10px] text-gray-400">120</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between mb-1">
+              <span className="text-xs text-gray-500">Herzratenvariabilität (HRV)</span>
+              <span className="text-xs font-bold text-purple-500">{hrv} ms</span>
+            </div>
+            <input type="range" min={20} max={150} step={1} value={hrv}
+              onChange={e => setHrv(Number(e.target.value))}
+              className="w-full h-2 rounded-full accent-purple-400" />
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[10px] text-gray-400">20</span>
+              <span className="text-[10px] text-gray-400">150</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between mb-1">
+              <span className="text-xs text-gray-500">Atemfrequenz (AF)</span>
+              <span className="text-xs font-bold text-teal-500">{af.toFixed(1)} /min</span>
+            </div>
+            <input type="range" min={8} max={30} step={0.1} value={af}
+              onChange={e => setAf(parseFloat(e.target.value))}
+              className="w-full h-2 rounded-full accent-teal-400" />
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[10px] text-gray-400">8</span>
+              <span className="text-[10px] text-gray-400">30</span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => runAnalyse(hf, hrv, af)}
+          disabled={analyseLoading}
+          className="mt-4 w-full py-3 rounded-xl bg-blue-500 text-white font-semibold text-sm active:bg-blue-600 transition-colors disabled:opacity-60"
+        >
+          {analyseLoading ? 'Analysiere…' : 'Analysieren'}
+        </button>
+      </Card>
+
+      {/* Analyse-Ergebnis */}
+      {analyse && (
+        <Card>
+          <p className="text-sm font-semibold text-gray-700 mb-3">Meine Analyse</p>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-3xl">{getEmpf(analyse.empfehlung).icon}</span>
+            <div className="flex flex-col gap-1.5">
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full w-fit ${getEmpf(analyse.empfehlung).badge}`}>
+                {getEmpf(analyse.empfehlung).label}
+              </span>
+              <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full w-fit ${getZust(analyse.zustand).badge}`}>
+                Zustand: {getZust(analyse.zustand).label}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-xl p-3">
+            {analyse.erklaerung}
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { label: 'Herzfreq.', value: `${analyse.messung.herzfrequenz} bpm`, color: 'text-rose-500' },
+              { label: 'HRV',       value: `${analyse.messung.hrv} ms`,           color: 'text-purple-500' },
+              { label: 'Atemfreq.', value: `${analyse.messung.atemfrequenz} /min`, color: 'text-teal-500' },
+            ].map(m => (
+              <div key={m.label} className="bg-gray-50 rounded-xl p-2 text-center">
+                <p className="text-[10px] text-gray-400">{m.label}</p>
+                <p className={`text-xs font-bold ${m.color}`}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Alle Empfehlungen */}
+      <Card>
+        <p className="text-sm font-semibold text-gray-700 mb-3">Alle Empfehlungen</p>
+        {listLoading ? (
+          <p className="text-xs text-gray-400 text-center py-4">Lade Empfehlungen…</p>
+        ) : empfehlungen && empfehlungen.length > 0 ? (
+          <div className="flex flex-col">
+            {empfehlungen.map((e, i) => {
+              const cfg = getEmpf(e.empfehlung);
+              return (
+                <div key={i} className={`flex items-center justify-between py-2.5 ${i < empfehlungen.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{cfg.icon}</span>
+                    <span className="text-sm font-medium text-gray-700 capitalize">{e.person}</span>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>
+                    {cfg.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 text-center py-4">Keine Daten verfügbar</p>
+        )}
+      </Card>
+
+      {/* Info */}
+      <Card>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-base">🧠</span>
+          <p className="text-sm font-semibold text-gray-700">Was ist Prolog KI?</p>
+        </div>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          Die Prolog KI analysiert biometrische Messwerte – Herzfrequenz, Herzratenvariabilität und
+          Atemfrequenz – und gibt personalisierte Energieempfehlungen. Die Analyse hilft dabei,
+          den optimalen Lern- und Energiezustand zu erkennen.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
 /* ─── Bottom Navigation ─── */
 const navItems = [
   { id: 'home', label: 'Home', icon: '⚡' },
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'verwaltung', label: 'Verwaltung', icon: '🔧' },
+  { id: 'prologki', label: 'Prolog KI', icon: '🧠' },
   { id: 'profil', label: 'Profil', icon: '👤' },
   { id: 'einstellungen', label: 'Einstellungen', icon: '⚙️' },
 ];
@@ -468,6 +673,16 @@ function HomeScreen({ onNavigate }) {
             <span className="ml-auto text-gray-300 text-lg">›</span>
           </Card>
         </button>
+        <button onClick={() => onNavigate('prologki')} className="active:scale-95 transition-transform col-span-2 text-left w-full">
+          <Card className="flex items-center gap-4 py-4">
+            <span className="text-3xl">🧠</span>
+            <div>
+              <p className="text-sm font-semibold text-gray-700">Prolog KI</p>
+              <p className="text-xs text-gray-400">Biometrische Energieanalyse</p>
+            </div>
+            <span className="ml-auto text-gray-300 text-lg">›</span>
+          </Card>
+        </button>
       </div>
       <Card>
         <p className="text-sm font-semibold text-gray-700 mb-3">Letzte Transaktionen</p>
@@ -503,26 +718,29 @@ const screenTitles = {
   dashboard: 'Kosten',
   verwaltung: 'Verwaltung',
   vorhersage: 'KI-Vorhersage',
+  prologki: 'Prolog KI',
   profil: 'Profil',
   einstellungen: 'Einstellungen',
 };
 
 export default function App() {
   const [screen, setScreen] = useState('home');
+  const [verkaufAktiv, setVerkaufAktiv] = useState(true);
 
   const renderScreen = () => {
     switch (screen) {
       case 'home': return <HomeScreen onNavigate={setScreen} />;
       case 'dashboard': return <DashboardScreen />;
-      case 'verwaltung': return <VerwaltungScreen />;
+      case 'verwaltung': return <VerwaltungScreen verkaufAktiv={verkaufAktiv} setVerkaufAktiv={setVerkaufAktiv} />;
       case 'vorhersage': return <VorhersageScreen />;
+      case 'prologki': return <PrologKIScreen verkaufAktiv={verkaufAktiv} />;
       case 'profil': return <ProfilScreen />;
       case 'einstellungen': return <EinstellungenScreen />;
       default: return <HomeScreen onNavigate={setScreen} />;
     }
   };
 
-  const navActive = screen === 'vorhersage' ? 'verwaltung' : screen;
+  const navActive = screen === 'vorhersage' ? 'verwaltung' : screen === 'prologki' ? 'prologki' : screen;
 
   return (
     <div className="min-h-screen bg-gray-200 flex items-start justify-center">
